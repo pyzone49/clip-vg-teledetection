@@ -173,6 +173,7 @@ class TransVGDataset(data.Dataset):
         self.transform = transform
         self.testmode = testmode
         self.split = split
+        self.test_image = None 
         # self.tokenizer = BertTokenizer.from_pretrained(bert_model, do_lower_case=True)
         self.return_idx = return_idx
 
@@ -224,7 +225,18 @@ class TransVGDataset(data.Dataset):
             self.images += torch.load(imgset_path)
 
         if self.prompt_template:
+            # print((self.images[2]))
             self.images = self.prompt(self.images)
+#             additiona_img = ('pic.jpg', "",
+#                     [65, 369, 138, 429],
+#                     'cup of coffee',
+# [('r1', ['cup']), ('r2', ['none']), ('r3', ['none']),
+# ('r4', ['none']), ('r5', ['none']), ('r6', ['none']),
+#  ('r7', ['none']), ('r8', ['none', 'none'])])
+            self.images = [self.images[100]]
+            self.test_image = self.images[0]
+            print(self.test_image)
+            # self.images.append(additiona_img)
 
     def exists_dataset(self):
         return osp.exists(osp.join(self.split_root, self.dataset))

@@ -279,9 +279,20 @@ class NormalizeAndPad(object):
             box[0], box[2] = box[0]+left, box[2]+left
             box[1], box[3] = box[1]+top, box[3]+top
             h, w = out_img.shape[-2:]
+            print('h, w:', h, w, "left, top:", left, top)
             box = xyxy2xywh(box)
             box = box / torch.tensor([w, h, w, h], dtype=torch.float32)
             input_dict['box'] = box
 
         return input_dict
 
+class Denormalize(object):
+    def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+        self.mean = mean
+        self.std = std
+    
+    def __call__(self, tensor):
+        mean = torch.as_tensor(self.mean, dtype=tensor.dtype, device=tensor.device).view(-1, 1, 1)
+        std = torch.as_tensor(self.std, dtype=tensor.dtype, device=tensor.device).view(-1, 1, 1)
+        tensor = tensor * std + mean
+        return tensor

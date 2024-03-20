@@ -7,7 +7,7 @@ import argparse
 import datetime
 import numpy as np
 from pathlib import Path
-
+from utils.box_utils import xywh2xyxy
 import torch
 import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader, DistributedSampler
@@ -77,7 +77,7 @@ def get_args_parser():
     parser.add_argument('--prompt', type=str, default='{pseudo_query}', help="Prompt template")
     # dataset parameters
     parser.add_argument('--output_dir', default='./outputs', help='path where to save, empty for no saving')
-    parser.add_argument('--device', default='cuda', help='device to use for training / testing')
+    parser.add_argument('--device', default='cpu', help='device to use for training / testing')
     parser.add_argument('--seed', default=13, type=int)
     parser.add_argument('--resume', default='', help='resume from checkpoint')
     parser.add_argument('--retrain', default='', help='retrain from checkpoint')
@@ -94,9 +94,40 @@ def get_args_parser():
     return parser
 
 
+def reverse_box_normalization(box, left, top, original_img_shape):
+    """
+    Reverses the bounding box normalization.
+    
+    Args:
+    - box (Tensor): The normalized bounding box [cx, cy, width, height].
+    - left (int): The left padding added to the image.
+    - top (int): The top padding added to the image.
+    - original_img_shape (Tuple[int, int]): The shape (height, width) of the original image before padding.
+    
+    Returns:
+    - Tensor: The original bounding box [x1, y1, x2, y2].
+    """
+    original_h, original_w = original_img_shape
+    # Rescale to the original image size
+    box = box * torch.tensor([original_w, original_h, original_w, original_h], dtype=torch.float32)
+    
+    # Convert from [cx, cy, width, height] to [x1, y1, x2, y2]
+    x1 = box[0] - box[2] / 2.0
+    y1 = box[1] - box[3] / 2.0
+    x2 = box[0] + box[2] / 2.0
+    y2 = box[1] + box[3] / 2.0
+    
+    # Undo the translation
+    x1 -= left
+    y1 -= top
+    x2 -= left
+    y2 -= top
+    
+    return torch.tensor([x1, y1, x2, y2])
+
 def main(args):
     """ distribution init """
-    utils.init_distributed_mode(args)
+    # utils.init_distributed_mode(args)
     print("git:\n  {}\n".format(utils.get_sha()))
     if (args.model == "ViT-L/14" or args.model == "ViT-L/14@336px"):
         args.vl_hidden_dim = 768
@@ -114,7 +145,7 @@ def main(args):
     model.to(device)
 
     model_without_ddp = model
-    if args.distributed:
+    if False: #args.distributed
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
         model_without_ddp = model.module
 
@@ -122,11 +153,10 @@ def main(args):
     n_parameters = sum(p.numel() for p in model.parameters())
     print('number of requires_grad params: ', n_parameters_grad)
     print('number of all params: ', n_parameters)
-
     # build dataset
     dataset_test = build_dataset(args.eval_set, args)
-
-    if args.distributed:
+    # exit()
+    if False:#args.distributed:
         sampler_test = DistributedSampler(dataset_test, shuffle=False)
     else:
         sampler_test = torch.utils.data.SequentialSampler(dataset_test)
@@ -138,6 +168,9 @@ def main(args):
     checkpoint = torch.load(args.eval_model, map_location='cpu')
     model_without_ddp.load_state_dict(checkpoint['model'])
     print("Current model training epoch is: ", checkpoint['epoch'])
+    
+
+
 
     # output log
     eval_model = args.eval_model
@@ -150,7 +183,32 @@ def main(args):
     start_time = time.time()
 
     # perform evaluation
-    accuracy = evaluate(args, model, data_loader_test, device)
+    accuracy,pred_boxes = evaluate(args, model, data_loader_test, device)
+    print(pred_boxes)
+    # boxes = reverse_box_normalization(pred_boxes[0],28,0,(224,224))
+    boxes = dataset_test.test_image[2]
+    #turn boxes into list
+    # boxes = boxes.tolist()
+    #read CLIP-VG/referit/images/9739.jpg
+    print(dataset_test.test_image)
+    from PIL import Image
+    img = Image.open(f'./referit/images/{dataset_test.test_image[0]}')
+    img = img.convert('RGB')
+    #highlight the box
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(img)
+    print(boxes)
+    #convert boxes to tensor
+    boxes = torch.tensor(boxes)
+    boxes = xywh2xyxy(boxes)
+    print(boxes)
+    #boxes to list
+    boxes = boxes.tolist()
+    draw.rectangle(boxes, outline='red')
+    #add caption
+    draw.text((0, 0), args.prompt, fill='white')
+    img.show()
+    # print(boxes,dataset_test[0])
 
     if utils.is_main_process():
         total_time = time.time() - start_time
