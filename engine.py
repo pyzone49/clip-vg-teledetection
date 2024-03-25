@@ -99,32 +99,29 @@ def evaluate(args, model: torch.nn.Module, data_loader: Iterable, device: torch.
 
     pred_box_list = []
     gt_box_list = []
-    undone = True
     for _, batch in enumerate(tqdm(data_loader)):
         img_data, text_data, target = batch
         batch_size = img_data.tensors.size(0)
-        if undone:
-            # print("batch: ", img_data, text_data, target)
-            undone = False
         # copy to GPU
         img_data = img_data.to(device)
         text_data = text_data.to(device)
         target = target.to(device)
 
         output = model(img_data, text_data)
+
         pred_box_list.append(output.cpu())
         gt_box_list.append(target.cpu())
 
     pred_boxes = torch.cat(pred_box_list, dim=0)
     gt_boxes = torch.cat(gt_box_list, dim=0)
-    # print("pred_boxes: ", pred_boxes)
     total_num = gt_boxes.shape[0]
     accu_num = eval_utils.trans_vg_eval_test(pred_boxes, gt_boxes)
 
     result_tensor = torch.tensor([accu_num, total_num]).to(device)
-    if False:
+    if device != torch.device("cpu"):
         torch.cuda.synchronize()
         dist.all_reduce(result_tensor)
+
     accuracy = float(result_tensor[0]) / float(result_tensor[1])
 
     return accuracy,gt_box_list

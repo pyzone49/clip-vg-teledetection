@@ -16,7 +16,7 @@ def make_transforms(args, image_set, is_onestage=False):
         return normalize
 
     imsize = args.imsize
-
+    print(f'Using image size {imsize}')
     if image_set in ['train', 'train_pseudo']:
         scales = []
         if args.aug_scale:

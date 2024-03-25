@@ -163,6 +163,9 @@ class RandomHorizontalFlip(object):
 
 
 class RandomResize(object):
+    """
+    Resize the input image to some size.
+    """
     def __init__(self, sizes, with_long_side=True):
         assert isinstance(sizes, (list, tuple))
         self.sizes = sizes
@@ -230,6 +233,9 @@ class RandomSelect(object):
 
 
 class ToTensor(object):
+    """
+    Convert image to tensor.
+    """
     def __call__(self, input_dict):
         img = input_dict['img']
         img = F.to_tensor(img)
@@ -239,6 +245,10 @@ class ToTensor(object):
 
 
 class NormalizeAndPad(object):
+    """
+    Normalize the image and pad to the target size.
+    Method 
+    """
     def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], size=640, aug_translate=False):
         self.mean = mean
         self.std = std
@@ -247,19 +257,21 @@ class NormalizeAndPad(object):
     
     def __call__(self, input_dict):
         img = input_dict['img']
+        # print('img shape:', img.shape)
         img = F.normalize(img, mean=self.mean, std=self.std)
         
         h, w = img.shape[1:]
         dw = self.size - w
         dh = self.size - h
-
+        # print('dw, dh:', dw, dh,"size" , self.size)
+        # print('h, w:', h, w)
         if self.aug_translate:
             top = random.randint(0, dh)
             left = random.randint(0, dw)
         else:
             top = round(dh / 2.0 - 0.1)
             left = round(dw / 2.0 - 0.1)
-
+        # print('top, left:', top, left)
         # dw = (self.size - w) / 2.0
         # dh = (self.size - h) / 2.0
         # top, bottom = round(dh - 0.1), round(dh + 0.1)
@@ -279,20 +291,49 @@ class NormalizeAndPad(object):
             box[0], box[2] = box[0]+left, box[2]+left
             box[1], box[3] = box[1]+top, box[3]+top
             h, w = out_img.shape[-2:]
-            print('h, w:', h, w, "left, top:", left, top)
+            # print('h, w:', h, w, "left, top:", left, top)
             box = xyxy2xywh(box)
             box = box / torch.tensor([w, h, w, h], dtype=torch.float32)
             input_dict['box'] = box
 
         return input_dict
 
-class Denormalize(object):
-    def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
-        self.mean = mean
-        self.std = std
+import torch
+
+def denormalize_bboxes(input_dict, original_width, original_height):
+    """
+    Adjusts bounding boxes from the processed (padded/translated) image back to the
+    original image's coordinate system.
     
-    def __call__(self, tensor):
-        mean = torch.as_tensor(self.mean, dtype=tensor.dtype, device=tensor.device).view(-1, 1, 1)
-        std = torch.as_tensor(self.std, dtype=tensor.dtype, device=tensor.device).view(-1, 1, 1)
-        tensor = tensor * std + mean
-        return tensor
+    Parameters:
+    - input_dict: A dictionary containing the processed image's bounding boxes
+      and possibly other data.
+    - original_width: The width of the original image before processing.
+    - original_height: The height of the original image before processing.
+    
+    The bounding boxes in input_dict are expected to be in normalized format
+    (x_center, y_center, width, height) relative to the processed image's dimensions.
+    """
+    
+    # Extract the bounding box in normalized format
+    bbox = input_dict['box']  # Assuming bbox is (x_center, y_center, width, height) and normalized
+    
+    # Denormalize bbox coordinates
+    x_center, y_center, width, height = bbox * torch.tensor([original_width, original_height, original_width, original_height], dtype=torch.float32)
+    
+    # Convert from (x_center, y_center, width, height) to (xmin, ymin, xmax, ymax)
+    xmin = x_center - (width / 2)
+    ymin = y_center - (height / 2)
+    xmax = x_center + (width / 2)
+    ymax = y_center + (height / 2)
+    
+    # Update input_dict with the adjusted bounding box
+    input_dict['denormalized_box'] = torch.tensor([xmin, ymin, xmax, ymax], dtype=torch.float32)
+    #to list of ints 
+    input_dict['denormalized_box'] = input_dict['denormalized_box'].int()
+    #to list
+    input_dict['denormalized_box'] = input_dict['denormalized_box'].tolist()
+    #from x,y,w,h to x1,y1,x2,y2
+    # input_dict['denormalized_box'] = [input_dict['denormalized_box'][0], input_dict['denormalized_box'][1], input_dict['denormalized_box'][0]+input_dict['denormalized_box'][2], input_dict['denormalized_box'][1]+input_dict['denormalized_box'][3]]
+    return input_dict['denormalized_box']
+

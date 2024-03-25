@@ -223,9 +223,10 @@ class TransVGDataset(data.Dataset):
             imgset_file = '{0}_{1}.pth'.format(self.dataset, split)
             imgset_path = osp.join(dataset_path, imgset_file)
             self.images += torch.load(imgset_path)
+            print(f"Len of self.images: {len(self.images)}")
 
         if self.prompt_template:
-            # print((self.images[2]))
+            self.images = self.images[20:25]
             self.images = self.prompt(self.images)
 #             additiona_img = ('pic.jpg', "",
 #                     [65, 369, 138, 429],
@@ -233,9 +234,8 @@ class TransVGDataset(data.Dataset):
 # [('r1', ['cup']), ('r2', ['none']), ('r3', ['none']),
 # ('r4', ['none']), ('r5', ['none']), ('r6', ['none']),
 #  ('r7', ['none']), ('r8', ['none', 'none'])])
-            self.images = [self.images[100]]
-            self.test_image = self.images[0]
-            print(self.test_image)
+            # self.test_image = self.images[0]
+            # print(self.test_image)
             # self.images.append(additiona_img)
 
     def exists_dataset(self):
@@ -294,8 +294,9 @@ class TransVGDataset(data.Dataset):
         img_file, img, phrase, bbox, bbox_ori = self.pull_item(idx)
         phrase = phrase.lower()
         input_dict = {'img': img, 'box': bbox, 'text': phrase}
+        print(f"Input  dict: {input_dict['img'].size}")
         input_dict = self.transform(input_dict)
-
+        print(f"Transformed dict: {input_dict['img'].shape}")
         img = input_dict['img']
         img_mask = input_dict['mask']
         bbox = input_dict['box']
