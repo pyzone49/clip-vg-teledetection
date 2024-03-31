@@ -7,7 +7,7 @@ import argparse
 import datetime
 import numpy as np
 from pathlib import Path
-
+import os.path as osp
 import torch
 import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader, DistributedSampler
@@ -19,7 +19,7 @@ from datasets import build_dataset
 from engine import evaluate
 import datasets.transforms as T
 from torchvision.transforms import ToPILImage
-
+from PIL import Image, ImageDraw, ImageFont
 import torchvision.transforms.functional as F
 
 import os
@@ -130,7 +130,6 @@ def main(args):
 
     # build dataset
     dataset_test = build_dataset(args.eval_set, args)
-
     if args.distributed:
         sampler_test = DistributedSampler(dataset_test, shuffle=False)
     else:
@@ -157,14 +156,28 @@ def main(args):
             f.write(str(args) + "\n")
             f.flush()
     start_time = time.time()
-    
+    real_boxes = []
+    images = []
+    images_prompts = []
+    # real_img_box = []
+    #dataloader to list of images
+    for i, batch in enumerate((dataset_test)):
+        # print("batch",batch,file=open("outputs/batch.txt","w"))
+        img, img_mask, text ,text_mask, bbox, img_file, phrase, bbox_ori = dataset_test.__getitem__(i)
+        print(img_file, bbox_ori, phrase)
+        images.append(img)
+        #from np float32 to list 
+        real_boxes.append( bbox.tolist())
+        images_prompts.append(phrase)
+        # real_img_box.append(bbox_ori)
+    print("Real boxes: ",real_boxes,file=open("outputs/real_boxes.txt","w"))
     # perform evaluation
-    accuracy,gt_boxes = evaluate(args, model, data_loader_test, device)
-    base_path = args.data_root +"/" + args.dataset + '/images/'
-    images_paths = [os.path.join(base_path, image_path[0]) for image_path in dataset_test.images]
-    images_prompts = [image_path[3] for image_path in dataset_test.images]
-    real_boxes = [ image_path[2] for image_path in dataset_test.images]
-    show_image(images_paths,gt_boxes[0],images_prompts,real_boxes,data_loader_test)
+    accuracy,gt_boxes,pred_box_list = evaluate(args, model, data_loader_test, device)
+    # print("Predicted boxes: ",pred_box_list[0],file=open("outputs/predicted_boxes.txt","w"))
+    print("Ground truth boxes: ",gt_boxes[0],file=open("outputs/ground_truth_boxes.txt","w"))
+    #real boxes
+    # print("Real boxes: ",real_boxes[0],file=open("outputs/real_boxes.txt","w"))
+    show_image(images,real_boxes,images_prompts,pred_box_list[0])
     if utils.is_main_process():
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
@@ -177,60 +190,41 @@ def main(args):
             with (output_dir / "eval_{}_{}_{}_log.txt".format(args.dataset, args.eval_set, eval_model)).open("a") as f:
                 f.write(json.dumps(log_stats) + "\n")
 
-def show_image(image_paths,gt_boxes,images_prompts,real_boxes,data_loader_test):
-    from PIL import Image, ImageDraw
+def show_image(images,gt_boxes,images_prompts,pred_boxes):
+    
     to_pil = ToPILImage()
     mean = torch.tensor([0.485, 0.456, 0.406])
     std = torch.tensor([0.229, 0.224, 0.225])
     # Ensure mean and std are reshaped to match the image tensor's dimensions: [C, 1, 1] for broadcasting
     mean = mean.view(-1, 1, 1)
     std = std.view(-1, 1, 1)
-    for i, image_path in enumerate(image_paths): 
-        #gtbox is the percentage x,percentage y,percentage w,percentage h
-        img = Image.open(image_path)
-        tensored = torch.tensor(real_boxes[i])
-        ##img to tensor
-        input_dict = {'img' : img, 'box' : tensored }
-        output_dict = T.RandomResize([args.imsize])(input_dict)
-        output_dict = T.ToTensor()(output_dict)
-        output_dict = T.NormalizeAndPad(size=args.imsize)(output_dict)
-        
-        img = output_dict['img']
-        # Denormalize
+    for i, image_path in enumerate(gt_boxes): 
+        img = images[i]
         img = img * std + mean
-
-        # Clip values to ensure they are within [0, 1] as expected for image data
         img = torch.clamp(img, 0, 1)
-
-        #from tensor to img
         img = to_pil(img)
         w_real,h_real = img.size
         box = gt_boxes[i]
-        print("img path",image_path,"Prompt is",images_prompts[i])
-        print("gt_boxes[i]",gt_boxes[i],input_dict['box'])
-        x,y,w,h = box
-        print("x,y,w,h",x,y,w,h)
-        x_center = int(x*w_real)
-        y_center = int(y*h_real)
-        w = int(w*w_real)
-        h = int(h*h_real)
-        x = x_center - w//2
-        y = y_center - h//2
-        print("x,y,w,h",x,y,w,h)
-        x1,y1,x2,y2 = x,y,x+w,y+h
-        print("x1,y1,x2,y2",x1,y1,x2,y2)
-        print("real_boxes[i]",real_boxes[i])
-        xreal,yreal,wreal,hreal = real_boxes[i]
+        x1,y1,x2,y2 = from_box_to_xyxy(box,w_real,h_real)
+        x,y,x0,y0 = from_box_to_xyxy(pred_boxes[i],w_real,h_real)
         #draw rectangle
         draw = ImageDraw.Draw(img)
-        draw.rectangle([x1,y1,x2,y2], outline='red')
-        draw.rectangle([xreal,yreal,wreal,hreal], outline='green')
+        draw.rectangle([x1,y1,x2,y2], outline='green',width=3)
+        draw.rectangle([x,y,x0,y0], outline='blue',width=3)
         #add text using prompt above the rectangle
-        draw.text((x1, y1-20), images_prompts[i], fill='white')
+        draw.text((0, h_real-40), images_prompts[i], fill='white')
         img.show()
-        # if input("Press Enter to continue") != "":
-        #     break
 
+def from_box_to_xyxy(box,width,height):
+    x,y,w,h = box
+    x_center = int(x* width)
+    y_center = int(y* height)
+    w = int(w* width)
+    h = int(h* height)
+    x = x_center - w//2
+    y = y_center - h//2
+    x1,y1,x2,y2 = x,y,w,h
+    return x1,y1,x2,y2
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('CLIP-VG evaluation script', parents=[get_args_parser()])

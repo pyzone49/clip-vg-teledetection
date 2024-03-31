@@ -263,7 +263,6 @@ class NormalizeAndPad(object):
         h, w = img.shape[1:]
         dw = self.size - w
         dh = self.size - h
-        # print('dw, dh:', dw, dh,"size" , self.size)
         # print('h, w:', h, w)
         if self.aug_translate:
             top = random.randint(0, dh)
@@ -271,7 +270,6 @@ class NormalizeAndPad(object):
         else:
             top = round(dh / 2.0 - 0.1)
             left = round(dw / 2.0 - 0.1)
-        # print('top, left:', top, left)
         # dw = (self.size - w) / 2.0
         # dh = (self.size - h) / 2.0
         # top, bottom = round(dh - 0.1), round(dh + 0.1)

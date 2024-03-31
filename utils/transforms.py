@@ -7,7 +7,8 @@ Generic Image Transform utillities.
 import cv2
 import random, math
 import numpy as np
-from collections import Iterable
+from collections.abc import Iterable
+
 
 import torch.nn.functional as F
 from torch.autograd import Variable

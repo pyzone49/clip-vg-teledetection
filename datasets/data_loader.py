@@ -18,7 +18,7 @@ import numpy as np
 import os.path as osp
 import scipy.io as sio
 import torch.utils.data as data
-
+import xml.etree.ElementTree as ET
 sys.path.append('.')
 
 
@@ -134,10 +134,13 @@ def convert_examples_to_features(examples, seq_length, tokenizer):
 class DatasetNotFoundError(Exception):
     pass
 
+def filelist(root, file_type):
+    return [os.path.join(directory_path, f) for directory_path, directory_name, files in os.walk(root) for f in files if f.endswith(file_type)]
 
 class TransVGDataset(data.Dataset):
     SUPPORTED_DATASETS = {
         'referit': {'splits': ('train', 'val', 'trainval', 'test', 'train_pseudo')},
+        'dior_rs': {'splits': ('train', 'val', 'test', 'train_pseudo')},
         'unc': {
             'splits': ('train', 'val', 'trainval', 'testA', 'testB', 'train_pseudo'),
             'params': {'dataset': 'refcoco', 'split_by': 'unc'}
@@ -192,6 +195,9 @@ class TransVGDataset(data.Dataset):
             self.dataset_root = osp.join(self.data_root, 'Flickr30k')
             # TODO: it should be note that this needs to change flickr30k_images to flickr30k-images
             self.im_dir = osp.join(self.dataset_root, 'flickr30k-images')
+        elif self.dataset == 'dior_rs':
+            self.dataset_root = osp.join(self.data_root, 'DIOR-RS-VG')
+            self.im_dir = osp.join(self.dataset_root, 'JPEGImages')
         else:  ## refcoco, etc.
             self.dataset_root = osp.join(self.data_root, 'other')
             self.im_dir = osp.join(self.dataset_root, 'images', 'mscoco', 'images', 'train2014')
@@ -220,30 +226,38 @@ class TransVGDataset(data.Dataset):
         if self.dataset != 'referit':
             splits = ['train', 'val'] if split == 'trainval' else [split]
         for split in splits:
-            imgset_file = '{0}_{1}.pth'.format(self.dataset, split)
-            imgset_path = osp.join(dataset_path, imgset_file)
-            self.images += torch.load(imgset_path)
-            print(f"Len of self.images: {len(self.images)}")
+            if self.dataset == 'dior_rs':
+                file_path = osp.join(dataset_path, split + '.txt')
+                file = open(file_path, "r").readlines()
+                Index = [int(index.strip('\n')) for index in file]
+                count = 0
+                anno_path = osp.join(self.dataset_root, 'Annotations')
+                annotations = filelist(anno_path, '.xml')
+                for anno_path in annotations:
+                    root = ET.parse(anno_path).getroot()
+                    for member in root.findall('object'):
+                        if count in Index:
+                            imageFile = root.find("./filename").text
+                            image_pth = imageFile.replace(".jpg", ".pth")
+                            box = ([int(member[2][0].text), int(member[2][1].text), int(member[2][2].text), int(member[2][3].text)])
+                            text = member[3].text
+                            self.images.append((imageFile, box, text))
+                        count += 1
+            else:
+                imgset_file = '{0}_{1}.pth'.format(self.dataset, split)
+                imgset_path = osp.join(dataset_path, imgset_file)
+                self.images += torch.load(imgset_path)
 
         if self.prompt_template:
-            self.images = self.images[20:25]
+            # self.images = self.images[:10]
             self.images = self.prompt(self.images)
-#             additiona_img = ('pic.jpg', "",
-#                     [65, 369, 138, 429],
-#                     'cup of coffee',
-# [('r1', ['cup']), ('r2', ['none']), ('r3', ['none']),
-# ('r4', ['none']), ('r5', ['none']), ('r6', ['none']),
-#  ('r7', ['none']), ('r8', ['none', 'none'])])
-            # self.test_image = self.images[0]
-            # print(self.test_image)
-            # self.images.append(additiona_img)
 
     def exists_dataset(self):
         return osp.exists(osp.join(self.split_root, self.dataset))
 
     # TODO: 这句是关键
     def pull_item(self, idx):
-        if self.dataset == 'flickr':
+        if self.dataset == 'flickr' or self.dataset == 'dior_rs':
             img_file, bbox, phrase = self.images[idx]
         else:
             img_file, _, bbox, phrase, attri = self.images[idx]
@@ -274,7 +288,7 @@ class TransVGDataset(data.Dataset):
         new_sample_list = []
 
         for i in range(n):
-            if self.dataset == 'flickr':
+            if self.dataset == 'flickr' or self.dataset == 'dior_rs':
                 tmp_sample = (sample_list[i][0], sample_list[i][1], self.prompt_template.replace('{pseudo_query}', sample_list[i][2]))
             else:
                 # print("\nsample_list:\n", sample_list[i])
@@ -294,9 +308,9 @@ class TransVGDataset(data.Dataset):
         img_file, img, phrase, bbox, bbox_ori = self.pull_item(idx)
         phrase = phrase.lower()
         input_dict = {'img': img, 'box': bbox, 'text': phrase}
-        print(f"Input  dict: {input_dict['img'].size}")
+        # print(f"Input  dict: {input_dict['img'].size}")
         input_dict = self.transform(input_dict)
-        print(f"Transformed dict: {input_dict['img'].shape}")
+        # print(f"Transformed dict: {input_dict['img'].shape}")
         img = input_dict['img']
         img_mask = input_dict['mask']
         bbox = input_dict['box']

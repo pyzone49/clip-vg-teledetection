@@ -19,8 +19,8 @@ def trans_vg_eval_test(pred_boxes, gt_boxes):
     pred_boxes = torch.clamp(pred_boxes, 0, 1)
     gt_boxes = xywh2xyxy(gt_boxes)
     iou = bbox_iou(pred_boxes, gt_boxes)
+    print(iou.tolist(),file=open('outputs/iou.txt','w'))
     accu_num = torch.sum(iou >= 0.5)
-
     return accu_num
 
 def trans_vg_eval_test_iou(pred_boxes, gt_boxes):
