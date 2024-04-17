@@ -249,7 +249,7 @@ class TransVGDataset(data.Dataset):
                 self.images += torch.load(imgset_path)
 
         if self.prompt_template:
-            # self.images = self.images[:10]
+            # self.images = self.images[100:110]
             self.images = self.prompt(self.images)
 
     def exists_dataset(self):

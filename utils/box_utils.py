@@ -2,6 +2,34 @@ import torch
 from torchvision.ops.boxes import box_area
 
 
+
+def trans_vg_eval_test_iom(pred_boxes, gt_boxes):
+    # Calculer l'intersection
+    intersection = torch.min(pred_boxes[:, 2:], gt_boxes[:, 2:]) - torch.max(pred_boxes[:, :2], gt_boxes[:, :2])
+    intersection = intersection.clamp(min=0).prod(dim=1)
+
+    # Calculer l'aire de prédiction et de ground truth
+    pred_area = (pred_boxes[:, 2] - pred_boxes[:, 0]) * (pred_boxes[:, 3] - pred_boxes[:, 1])
+    gt_area = (gt_boxes[:, 2] - gt_boxes[:, 0]) * (gt_boxes[:, 3] - gt_boxes[:, 1])
+
+    # Calculer le minimum de l'aire de prédiction et de ground truth
+    min_areas = torch.min(pred_area, gt_area)
+
+    # Calculer l'IoM (Intersection over Minimum)
+    iom = intersection / min_areas
+
+    # Déterminer les prédictions correctes (IoM > seuil, généralement 0.5 pour la détection d'objets)
+    correct = (iom > 0.5).sum().item()
+
+    return correct, iom
+
+def avg_box_diff(pred_boxes, gt_boxes):
+    # Calculer la différence moyenne entre les boîtes prédites et les boîtes ground truth
+    diff = torch.abs(pred_boxes - gt_boxes)
+    avg_diff = diff.mean(dim=1).sum().item()
+
+    return avg_diff
+
 def bbox_iou(box1, box2, x1y1x2y2=True):
     """
     Returns the IoU of two bounding boxes

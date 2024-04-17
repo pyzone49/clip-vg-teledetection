@@ -38,7 +38,7 @@ class MultiLevel_ImageEncoder_modified(nn.Module):
         self.ln_pre = clip_visu_model.ln_pre
         self.transformer = MultiLevel_Transformer(clip_visu_model.transformer, extract_layer)
         self.ln_post = clip_visu_model.ln_post
-        self.proj = clip_visu_model.proj
+        self.proj = clip_visu_model.proj 
         self.positional_embedding.requires_grad_(True)
 
     def forward(self, x):

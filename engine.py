@@ -115,12 +115,13 @@ def evaluate(args, model: torch.nn.Module, data_loader: Iterable, device: torch.
     pred_boxes = torch.cat(pred_box_list, dim=0)
     gt_boxes = torch.cat(gt_box_list, dim=0)
     total_num = gt_boxes.shape[0]
+    #save pred_boxes and gt_boxes in file  to load 
+    with open('outputs/pred_boxes.pth','wb') as f:
+        torch.save(pred_boxes,f)
+    with open('outputs/gt_boxes.pth','wb') as f:
+        torch.save(gt_boxes,f)
+    
     accu_num = eval_utils.trans_vg_eval_test(pred_boxes, gt_boxes)
-    #print the shape of pred_boxes and gt_boxes
-    # print("pred_boxes shape: ", pred_boxes.shape)
-    # print("gt_boxes shape: ", gt_boxes.shape)
-    print("accu_num: ", accu_num)
-    print("total_num: ", total_num)
     result_tensor = torch.tensor([accu_num, total_num]).to(device)
     if device != torch.device("cpu"):
         torch.cuda.synchronize()
@@ -128,7 +129,7 @@ def evaluate(args, model: torch.nn.Module, data_loader: Iterable, device: torch.
 
     accuracy = float(result_tensor[0]) / float(result_tensor[1])
 
-    return accuracy,gt_box_list, pred_box_list
+    return accuracy,gt_boxes, pred_boxes
 
 
 @torch.no_grad()  # this is iou-based

@@ -184,31 +184,6 @@ def main(args):
 
     # perform evaluation
     accuracy,real,pred_boxes = evaluate(args, model, data_loader_test, device)
-    # print(pred_boxes)
-    # boxes = reverse_box_normalization(pred_boxes[0],28,0,(224,224))
-    # boxes = dataset_test.test_image[2]
-    #turn boxes into list
-    # boxes = boxes.tolist()
-    #read CLIP-VG/referit/images/9739.jpg
-    # print(dataset_test.test_image)
-    # from PIL import Image
-    # img = Image.open(f'./referit/images/{dataset_test.test_image[0]}')
-    # img = img.convert('RGB')
-    # #highlight the box
-    # from PIL import ImageDraw
-    # draw = ImageDraw.Draw(img)
-    # print(boxes)
-    # #convert boxes to tensor
-    # boxes = torch.tensor(boxes)
-    # boxes = xywh2xyxy(boxes)
-    # print(boxes)
-    # #boxes to list
-    # boxes = boxes.tolist()
-    # draw.rectangle(boxes, outline='red')
-    # #add caption
-    # draw.text((0, 0), args.prompt, fill='white')
-    # img.show()
-    # print(boxes,dataset_test[0])
 
     if utils.is_main_process():
         total_time = time.time() - start_time
