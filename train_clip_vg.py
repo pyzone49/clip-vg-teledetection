@@ -217,7 +217,6 @@ def main(args):
                      **{f'train_{k}': v for k, v in train_stats.items()},
                      **{f'validation_{k}': v for k, v in val_stats.items()},
                      'n_parameters': n_parameters}
-        print(log_stats)
         if args.output_dir and utils.is_main_process():
             with open(os.path.join(args.output_dir, "log.txt"), "a") as f:
                 f.write(json.dumps(log_stats) + "\n")

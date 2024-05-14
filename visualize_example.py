@@ -4,7 +4,7 @@ import math
 import json
 import random
 import argparse
-import datetime
+import datetime,traceback
 import numpy as np
 from pathlib import Path
 import os.path as osp
@@ -130,6 +130,7 @@ def main(args):
 
     # build dataset
     dataset_test = build_dataset(args.eval_set, args)
+    dataset_test.images = dataset_test.images[350:380]
     if args.distributed:
         sampler_test = DistributedSampler(dataset_test, shuffle=False)
     else:
@@ -177,7 +178,7 @@ def main(args):
     print("Ground truth boxes: ",gt_boxes[0],file=open("outputs/ground_truth_boxes.txt","w"))
     #real boxes
     # print("Real boxes: ",real_boxes[0],file=open("outputs/real_boxes.txt","w"))
-    show_image(images,real_boxes,images_prompts,pred_box_list[0])
+    show_image(images,real_boxes,images_prompts,pred_box_list)
     if utils.is_main_process():
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
@@ -199,23 +200,30 @@ def show_image(images,gt_boxes,images_prompts,pred_boxes):
     mean = mean.view(-1, 1, 1)
     std = std.view(-1, 1, 1)
     for i, image_path in enumerate(gt_boxes): 
-        img = images[i]
-        img = img * std + mean
-        img = torch.clamp(img, 0, 1)
-        img = to_pil(img)
-        w_real,h_real = img.size
-        box = gt_boxes[i]
-        x1,y1,x2,y2 = from_box_to_xyxy(box,w_real,h_real)
-        x,y,x0,y0 = from_box_to_xyxy(pred_boxes[i],w_real,h_real)
-        #draw rectangle
-        draw = ImageDraw.Draw(img)
-        draw.rectangle([x1,y1,x2,y2], outline='green',width=3)
-        draw.rectangle([x,y,x0,y0], outline='blue',width=3)
-        #add text using prompt above the rectangle
-        draw.text((0, h_real-40), images_prompts[i], fill='white')
-        img.show()
-
+        try:
+            img = images[i]
+            img = img * std + mean
+            img = torch.clamp(img, 0, 1)
+            img = to_pil(img)
+            w_real,h_real = img.size
+            box = gt_boxes[i]
+            x1,y1,x2,y2 = from_box_to_xyxy(box,w_real,h_real)
+            x,y,x0,y0 = from_box_to_xyxy(pred_boxes[i],w_real,h_real)
+            #draw rectangle
+            draw = ImageDraw.Draw(img)
+            draw.rectangle([x1,y1,x2,y2], outline='green',width=3)
+            draw.rectangle([x,y,x0,y0], outline='blue',width=3)
+            #add text using prompt above the rectangle
+            draw.text((0, 0), images_prompts[i], fill='white')
+            img.show()
+        except:
+            traceback.print_exc()
+            pass
 def from_box_to_xyxy(box,width,height):
+    # try:
+    print("Box: ",box)
+    #from tensor to list
+    # box = box.tolist()
     x,y,w,h = box
     x_center = int(x* width)
     y_center = int(y* height)
@@ -225,7 +233,8 @@ def from_box_to_xyxy(box,width,height):
     y = y_center - h//2
     x1,y1,x2,y2 = x,y,w,h
     return x1,y1,x2,y2
-
+    # except:
+    #     return 0,0,0,0
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('CLIP-VG evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()

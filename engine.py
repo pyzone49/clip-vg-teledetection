@@ -83,9 +83,12 @@ def validate(args, model: torch.nn.Module, data_loader: Iterable, device: torch.
 
         pred_boxes = model(img_data, text_data)
         miou, accu = eval_utils.trans_vg_eval_val(pred_boxes, target)
-
+        loss_dict = loss_utils.trans_vg_loss(pred_boxes, target)
+        for k, v in loss_dict.items():
+            metric_logger.update_v2(k, v, batch_size)
         metric_logger.update_v2('miou', torch.mean(miou), batch_size)
         metric_logger.update_v2('accu', accu, batch_size)
+        
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -115,21 +118,25 @@ def evaluate(args, model: torch.nn.Module, data_loader: Iterable, device: torch.
     pred_boxes = torch.cat(pred_box_list, dim=0)
     gt_boxes = torch.cat(gt_box_list, dim=0)
     total_num = gt_boxes.shape[0]
-    #save pred_boxes and gt_boxes in file  to load 
-    with open('outputs/pred_boxes.pth','wb') as f:
+    # save pred_boxes and gt_boxes in file  to load 
+    with open('pred_boxes8_lr1.pth','wb+') as f:
         torch.save(pred_boxes,f)
-    with open('outputs/gt_boxes.pth','wb') as f:
+    with open('gt_boxes8_lr1.pth','wb+') as f:
         torch.save(gt_boxes,f)
-    
-    accu_num = eval_utils.trans_vg_eval_test(pred_boxes, gt_boxes)
-    result_tensor = torch.tensor([accu_num, total_num]).to(device)
+
+    results_dict = {
+        "Pr@0.5": float(eval_utils.trans_vg_eval_test(pred_boxes, gt_boxes, 0.5)/total_num),
+        "Pr@0.6" : float(eval_utils.trans_vg_eval_test(pred_boxes, gt_boxes, 0.6)/total_num),
+        "Pr@0.7" : float(eval_utils.trans_vg_eval_test(pred_boxes, gt_boxes, 0.7)/total_num),
+        "Pr@0.8" : float(eval_utils.trans_vg_eval_test(pred_boxes, gt_boxes, 0.8)/total_num),
+        "Pr@0.9" : float(eval_utils.trans_vg_eval_test(pred_boxes, gt_boxes, 0.9)/total_num),
+        "meanIoU" : float(eval_utils.trans_vg_mean_iou(pred_boxes, gt_boxes)),
+        "cumIoU" : float(eval_utils.trans_vg_cumulative_iou(pred_boxes, gt_boxes)/total_num)
+    }    
     if device != torch.device("cpu"):
         torch.cuda.synchronize()
         dist.all_reduce(result_tensor)
-
-    accuracy = float(result_tensor[0]) / float(result_tensor[1])
-
-    return accuracy,gt_boxes, pred_boxes
+    return results_dict,gt_boxes, pred_boxes
 
 
 @torch.no_grad()  # this is iou-based

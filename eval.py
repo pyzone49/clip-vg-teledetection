@@ -183,15 +183,17 @@ def main(args):
     start_time = time.time()
 
     # perform evaluation
-    accuracy,real,pred_boxes = evaluate(args, model, data_loader_test, device)
+    results,real,pred_boxes = evaluate(args, model, data_loader_test, device)
 
     if utils.is_main_process():
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print('Testing time {}'.format(total_time_str))
         log_stats = {'test_model:': args.eval_model,
-                     '%s_set_accuracy'%args.eval_set: accuracy,
                      }
+        for k, v in results.items():
+            #format into percentage with 2 decimal points
+            log_stats[k] =  "{:.2%}".format(v)
         print(log_stats)
         if args.output_dir and utils.is_main_process():
             with (output_dir / "eval_{}_{}_{}_log.txt".format(args.dataset, args.eval_set, eval_model)).open("a") as f:

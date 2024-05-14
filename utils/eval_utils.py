@@ -14,7 +14,7 @@ def trans_vg_eval_val(pred_boxes, gt_boxes):
 
     return iou, accu
 
-def trans_vg_eval_test(pred_boxes, gt_boxes):
+def trans_vg_eval_test(pred_boxes, gt_boxes,threshold=0.5):
     pred_boxes = xywh2xyxy(pred_boxes)
     pred_boxes = torch.clamp(pred_boxes, 0, 1)
     gt_boxes = xywh2xyxy(gt_boxes)
@@ -22,8 +22,30 @@ def trans_vg_eval_test(pred_boxes, gt_boxes):
     pred_area = (pred_boxes[:,2]-pred_boxes[:,0]) * (pred_boxes[:,3]-pred_boxes[:,1])
     gt_area = (gt_boxes[:,2]-gt_boxes[:,0]) * (gt_boxes[:,3]-gt_boxes[:,1])
     iou = bbox_iou(pred_boxes, gt_boxes)
-    accu_num = torch.sum(iou >= 0.5)
+    accu_num = torch.sum(iou >= threshold)
     return accu_num
+
+def trans_vg_mean_iou(pred_boxes, gt_boxes):
+    pred_boxes = xywh2xyxy(pred_boxes)
+    pred_boxes = torch.clamp(pred_boxes, 0, 1)
+    gt_boxes = xywh2xyxy(gt_boxes)
+    iou = bbox_iou(pred_boxes, gt_boxes)
+    mean_iou = torch.mean(iou)
+
+    return mean_iou
+def trans_vg_cumulative_iou(pred_boxes, gt_boxes):
+    pred_boxes = xywh2xyxy(pred_boxes)
+    pred_boxes = torch.clamp(pred_boxes, 0, 1)
+    gt_boxes = xywh2xyxy(gt_boxes)
+    
+    # iou = bbox_iou(pred_boxes, gt_boxes)
+    # cumulative_iou = torch.sum(iou)
+    #calculate the sum of the intersection between the predicted and ground truth boxes
+    sum_inter =  torch.sum(torch.min(pred_boxes[:,2:], gt_boxes[:,2:]) - torch.max(pred_boxes[:,:2], gt_boxes[:,:2]))
+    #calculate the sum of the union between the predicted and ground truth boxes
+    sum_union = torch.sum(torch.max(pred_boxes[:,2:], gt_boxes[:,2:]) - torch.min(pred_boxes[:,:2], gt_boxes[:,:2]))
+    return  sum_inter/sum_union
+
 
 def trans_vg_eval_test_iou(pred_boxes, gt_boxes):
     pred_boxes = xywh2xyxy(pred_boxes)
@@ -95,3 +117,32 @@ def bounding_box_regression_loss(pred_boxes, gt_boxes):
     # Calculer la perte L1 entre les prédictions et les ground truth
     loss = torch.abs(pred_boxes - gt_boxes).sum(dim=1).mean()
     return loss
+
+def trans_vg_eval_test_giou(pred_boxes, gt_boxes):
+    # Convertir les boîtes au format x1y1x2y2
+    pred_boxes = xywh2xyxy(pred_boxes)
+    gt_boxes = xywh2xyxy(gt_boxes)
+
+    # Calculer l'intersection
+    intersection = torch.min(pred_boxes[:, 2:], gt_boxes[:, 2:]) - torch.max(pred_boxes[:, :2], gt_boxes[:, :2])
+    intersection = intersection.clamp(min=0).prod(dim=1)
+
+    # Calculer l'aire de prédiction et de ground truth
+    pred_area = (pred_boxes[:, 2] - pred_boxes[:, 0]) * (pred_boxes[:, 3] - pred_boxes[:, 1])
+    gt_area = (gt_boxes[:, 2] - gt_boxes[:, 0]) * (gt_boxes[:, 3] - gt_boxes[:, 1])
+
+    # Calculer l'union
+    union = pred_area + gt_area - intersection
+
+    # Calculer les boîtes englobantes minimales (enclosing boxes)
+    enclose_x1y1 = torch.min(pred_boxes[:, :2], gt_boxes[:, :2])
+    enclose_x2y2 = torch.max(pred_boxes[:, 2:], gt_boxes[:, 2:])
+    enclose_area = (enclose_x2y2[:, 0] - enclose_x1y1[:, 0]) * (enclose_x2y2[:, 1] - enclose_x1y1[:, 1])
+
+    # Calculer GIoU
+    giou = intersection / union - (enclose_area - union) / enclose_area
+
+    # Déterminer les prédictions correctes (IoM > seuil, généralement 0.5 pour la détection d'objets)
+    correct = (giou > 0.5).sum().item()
+
+    return correct
