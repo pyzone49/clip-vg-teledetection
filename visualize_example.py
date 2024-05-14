@@ -130,7 +130,7 @@ def main(args):
 
     # build dataset
     dataset_test = build_dataset(args.eval_set, args)
-    dataset_test.images = dataset_test.images[350:380]
+    dataset_test.images = dataset_test.images[500:550]
     if args.distributed:
         sampler_test = DistributedSampler(dataset_test, shuffle=False)
     else:
@@ -145,9 +145,6 @@ def main(args):
     print("Current model training epoch is: ", checkpoint['epoch'])
     #print first example from data_loader_test
     item = next(iter(data_loader_test))
-    save_path = args.output_dir + "/first_example.txt"
-    with open(save_path, "w") as f:
-        f.write(str(item))
     # output log
     eval_model = args.eval_model
     eval_model = eval_model.split('/')[-1].split('.')[0]
@@ -171,13 +168,7 @@ def main(args):
         real_boxes.append( bbox.tolist())
         images_prompts.append(phrase)
         # real_img_box.append(bbox_ori)
-    print("Real boxes: ",real_boxes,file=open("outputs/real_boxes.txt","w"))
-    # perform evaluation
     accuracy,gt_boxes,pred_box_list = evaluate(args, model, data_loader_test, device)
-    # print("Predicted boxes: ",pred_box_list[0],file=open("outputs/predicted_boxes.txt","w"))
-    print("Ground truth boxes: ",gt_boxes[0],file=open("outputs/ground_truth_boxes.txt","w"))
-    #real boxes
-    # print("Real boxes: ",real_boxes[0],file=open("outputs/real_boxes.txt","w"))
     show_image(images,real_boxes,images_prompts,pred_box_list)
     if utils.is_main_process():
         total_time = time.time() - start_time

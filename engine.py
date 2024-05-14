@@ -119,9 +119,9 @@ def evaluate(args, model: torch.nn.Module, data_loader: Iterable, device: torch.
     gt_boxes = torch.cat(gt_box_list, dim=0)
     total_num = gt_boxes.shape[0]
     # save pred_boxes and gt_boxes in file  to load 
-    with open('pred_boxes8_lr1.pth','wb+') as f:
+    with open('../pred_boxes8_lr1.pth','wb+') as f:
         torch.save(pred_boxes,f)
-    with open('gt_boxes8_lr1.pth','wb+') as f:
+    with open('../gt_boxes8_lr1.pth','wb+') as f:
         torch.save(gt_boxes,f)
 
     results_dict = {
@@ -133,9 +133,9 @@ def evaluate(args, model: torch.nn.Module, data_loader: Iterable, device: torch.
         "meanIoU" : float(eval_utils.trans_vg_mean_iou(pred_boxes, gt_boxes)),
         "cumIoU" : float(eval_utils.trans_vg_cumulative_iou(pred_boxes, gt_boxes)/total_num)
     }    
-    if device != torch.device("cpu"):
-        torch.cuda.synchronize()
-        dist.all_reduce(result_tensor)
+    # if device != torch.device("cpu"):
+    #     torch.cuda.synchronize()
+    #     dist.all_reduce(result_tensor)
     return results_dict,gt_boxes, pred_boxes
 
 
